@@ -46,16 +46,21 @@ class Searchwhile(object):
                 ins_target_addr = jump_list[1]
                 if ins.operands[0].type==X86_OP_IMM:   #jmp imm
                     ins_target_addr = ins.operands[0].value.imm
-                elif ins.operands[0].type ==X86_OP_MEM:   #jmp qword[rip+disp]
+                elif ins.operands[0].type==X86_OP_MEM:   #jmp qword[rip+disp]
                     if ins.operands[0].value.mem.base==X86_REG_RIP:
                         ins_target_addr = ins.operands[0].value.mem.disp+ins.address+ins.size
+                elif ins.operands[0].type==X86_OP_REG:   #jmp reg
+                    find_flag = False
+                    break
                 if ins_target_addr>jump_list[2] or ins_target_addr<jump_list[1]:
                     find_flag = False
                     break
+            elif start_flag==True and ins.id==X86_INS_RET:  #ret
+                find_flag = False
+                break
+
         if find_flag:
             print "[WHILE] 0x%x---0x%x"%(jump_list[1],jump_list[2])
-        # else:
-        #     print "[FALSE] 0x%x---0x%x"%(jump_list[1],jump_list[2])
 
     def __StartThearding(self):
         #using thread pool to find the while true instruction models
