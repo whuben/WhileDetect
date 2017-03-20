@@ -8,7 +8,7 @@ from searchwhile import *
 import sys
 
 def main():
-    '$python Bin-FR.py bin_path'
+    '$python whiledetect.py bin_path'
     if len(sys.argv)<2:
         print "please set the binary path!"
         exit(1)
