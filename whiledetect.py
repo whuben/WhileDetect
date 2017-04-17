@@ -24,6 +24,7 @@ def main():
     #time1=time.time()  #the start time
     # call the rewrite class to randomize the binary
     while_detect = Searchwhile(bin_raw)
+    while_detect.printWhile()
 
 if __name__ == '__main__':
     main()
