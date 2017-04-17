@@ -10,7 +10,6 @@ from ctypes import *
 from typedef import *
 from elf import *
 from dissamble import *
-from threadpool import *
 
 JUMP_MAX_DITANCE = 0xff
 MAX_NUM_THREAD = 20
