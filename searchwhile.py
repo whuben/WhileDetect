@@ -20,58 +20,58 @@ class Searchwhile(object):
         self.__elfparse = Elf64_Parse(elf)
         self.__dissamble = Dissamble(elf,self.__elfparse.GetShdr())
         self.__dissamble_dict = self.__dissamble.dissamble_dict
-        self.__jump_list = []   #format [ [key,target_addr,ins.address] ]
-        self.__while_list = []
+        self.__transfer_dict = {}  #dict for recording transfer instructions
+        self.__while_dict = {} #dict for recording the while loop
         self.__FindJump()
-        self.__StartThearding()
-
+ 
     def __FindJump(self):
         for key in self.__dissamble_dict:
             for ins in self.__dissamble_dict[key]:
-                if ins.id == X86_INS_JMP and ins.operands[0].type==X86_OP_IMM:  # jump imm
-                    target_addr = ins.operands[0].value.imm
-                    if  target_addr < ins.address and ins.address-target_addr<=JUMP_MAX_DITANCE:
-                        self.__jump_list.append([key,target_addr,ins.address])
-
-    def __FindWhile(self,jump_list):
-        start_flag = False
-        find_flag = True
-        for ins in self.__dissamble_dict[jump_list[0]]:
-            if ins.address==jump_list[1]:
-                start_flag = True
-                continue
-            if ins.address==jump_list[2]:
-                break
-            if start_flag==True and ins.id>=X86_INS_JAE and ins.id<=X86_INS_JS: #values between 255-274 are instructions with a type of jump
-                ins_target_addr = jump_list[1]
-                if ins.operands[0].type==X86_OP_IMM:   #jmp imm
-                    ins_target_addr = ins.operands[0].value.imm
-                elif ins.operands[0].type==X86_OP_MEM:   #jmp qword[rip+disp]
-                    if ins.operands[0].value.mem.base==X86_REG_RIP:
-                        ins_target_addr = ins.operands[0].value.mem.disp+ins.address+ins.size
-                elif ins.operands[0].type==X86_OP_REG:   #jmp reg
-                    find_flag = False
-                    break
-                if ins_target_addr>jump_list[2] or ins_target_addr<jump_list[1]:
-                    find_flag = False
-                    break
-            elif start_flag==True and ins.id==X86_INS_RET:  #ret
-                find_flag = False
-                break
-
-        if find_flag:
-            print "[WHILE] 0x%x---0x%x"%(jump_list[1],jump_list[2])
-
-    def __StartThearding(self):
-        #using thread pool to find the while true instruction models
-        pool = ThreadPool(MAX_NUM_THREAD)
-        requests = makeRequests(self.__FindWhile,self.__jump_list)
-        for req in requests:
-            pool.putRequest(req)
-        pool.wait()
-
-
-
-
+                if (ins.id>=X86_INS_JAE and ins.id<=X86_INS_JS) or ins.id==X86_INS_RET:  #jump/ret instructions
+                    key_address = ins.address
+                    value_ins = ins 
+                    self.__transfer_dict[key_address]=value_ins
+        key_sort = sorted(self.__transfer_dict.keys())
+        for i in range(len(key_sort)):
+            trans_ins = self.__transfer_dict[key_sort[i]]
+            if trans_ins.id==X86_INS_JMP and trans_ins.operands[0].type==X86_OP_IMM: #jmp imm
+                target_addr = trans_ins.operands[0].imm
+                if target_addr<trans_ins.address: #jump to above
+                    if i==0: #handle the first jmp instrucion
+                        self.__while_dict[trans_ins.address] = trans_ins
+                    else:
+                        if target_addr>key_sort[i-1]:
+                            self.__while_dict[trans_ins.address] = trans_ins
+                        else :
+                            back_index = i
+                            while target_addr<=key_sort[back_index-1] and back_index>=1:
+                                back_index-=1
+                            while_flag = True
+                            for j in range(back_index,i):                               
+                                pre_ins = self.__transfer_dict[key_sort[j]]
+                                if pre_ins.id==X86_INS_RET:
+                                    while_flag = False
+                                    break
+                                if pre_ins.id>=X86_INS_JAE and pre_ins.id<=X86_INS_JS: #jump
+                                    operand_type = pre_ins.operands[0].type
+                                    pre_target_addr = 0x00
+                                    if operand_type==X86_OP_REG:   #jmp reg
+                                        while_flag = False
+                                        break
+                                    elif operand_type==X86_OP_IMM: #jmp imm
+                                        pre_target_addr = pre_ins.operands[0].imm
+                                    elif operand_type==X86_OP_MEM and pre_ins.operands[0].value.mem.base==X86_REG_RIP: #jmp qword[rip+disp]
+                                        pre_target_addr = pre_ins.operands[0].value.mem.disp+pre_ins.address+pre_ins.size
+                                    if pre_target_addr==0x00 or pre_target_addr>trans_ins.address or pre_target_addr<target_addr:
+                                        while_flag = False
+                                        break
+                            if while_flag:
+                                self.__while_dict[trans_ins.address]=trans_ins
+    def printWhile(self):
+        print "---------WHILE INFO---------"
+        key_while = sorted(self.__while_dict.keys())
+        for key_addr in key_while:
+            ins = self.__while_dict[key_addr]
+            print "[0x%x]:\t%s\t%s\n"%(ins.address,ins.mnemonic,ins.op_str)
 
         
